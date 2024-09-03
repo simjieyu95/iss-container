@@ -1,0 +1,31 @@
+# version: '3.8'
+
+services:
+  mydb:
+    image: stackupiss/northwind-db:v1
+    container_name: mydb
+    networks:
+      - mynet
+    volumes:
+      - mydb-volume:/var/lib/mysql
+
+  myapp:
+    image: stackupiss/northwind-app:v1
+    container_name: myapp
+    ports:
+      - "8080:3000"
+    environment:
+      DB_HOST: mydb
+      DB_USER: root
+      DB_PASSWORD: changeit
+    networks:
+      - mynet
+
+networks:
+  mynet:
+    name: "mynet"
+    external: true
+
+volumes:
+  mydb-volume:
+    name: "mydb-volume"
