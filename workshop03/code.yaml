@@ -1,0 +1,147 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: codens
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: 
+  name: code-pvc
+  namespace: codens
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: do-block-storage-retain
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: codens
+  name: myapp-config
+data:
+  TZ: Asia/Singapore 
+  PASSWORD: password 
+  SUDO_PASSWORD: password 
+  DEFAULT_WORKSPACE: /config/workspace
+  PROXY_DOMAIN: code.146.190.195.228.nip.io
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: code-deploy
+  namespace: codens
+  labels:
+    app: code
+    name: code-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: code
+      name: code-po
+  template:
+    metadata: 
+      name: code-po
+      namespace: codens
+      labels: 
+        app: code
+        name: code-po
+    spec: 
+      securityContext:
+        fsGroup: 1000
+      volumes: 
+        - name: data-vol
+          persistentVolumeClaim:
+            claimName: code-pvc
+      containers:
+      - name: code-container
+        image: linuxserver/code-server:amd64-latest
+        env:
+        - name: TZ
+          valueFrom: 
+            configMapKeyRef:
+              name: myapp-config
+              key: TZ
+        - name: PASSWORD
+          valueFrom: 
+            configMapKeyRef:
+              name: myapp-config
+              key: PASSWORD
+        - name: SUDO_PASSWORD
+          valueFrom: 
+            configMapKeyRef:
+              name: myapp-config
+              key: SUDO_PASSWORD
+        - name: DEFAULT_WORKSPACE
+          valueFrom: 
+            configMapKeyRef:
+              name: myapp-config
+              key: DEFAULT_WORKSPACE
+        - name: PROXY_DOMAIN
+          valueFrom: 
+            configMapKeyRef:
+              name: myapp-config
+              key: PROXY_DOMAIN
+        - name: PUID
+          value: '1000'
+        - name: PGID
+          value: '1000'
+
+        ports:
+        - containerPort: 8443
+        volumeMounts: 
+        - name: data-vol
+          mountPath: /config/workspace 
+        resources: 
+          requests: 
+            cpu: 200m
+            memory: 1Gi
+          limits:
+            cpu: 200m
+            memory: 1Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: code-svc
+  namespace: codens
+  labels:
+    app: code
+    name: code-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: code
+    name: code-po
+  ports:
+  - port: 8443
+    targetPort: 8443
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: code-ing
+  namespace: codens
+  labels:
+    app: code
+    name: code-ing
+spec:
+  ingressClassName: nginx
+  rules: 
+  - host: code.146.190.195.228.nip.io
+    http:
+      paths: 
+      - path: /
+        pathType: Prefix
+        backend: 
+          service:
+            name: code-svc
+            port: 
+              number: 8443
+      
